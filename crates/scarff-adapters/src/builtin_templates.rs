@@ -310,9 +310,9 @@ mod tests {
     use super::*;
     use scarff_core::domain::{Framework, Language, ProjectKind, TemplateNode};
     use std::fs;
-    use tempfile::TempDir;
 
     /// Minimal `template.toml` content for seeding a test directory.
+    #[allow(unused)]
     const MINIMAL_MANIFEST: &str = r#"
 [template]
 id      = "t"
@@ -328,12 +328,14 @@ name = "Test"
     /// **Not safe for parallel tests** — use `#[serial_test::serial]` if you
     /// add parallel test runners.  Here each test uses a unique env-var value
     /// to avoid cross-contamination.
+    #[allow(unused)]
     fn with_env_templates_dir<F: FnOnce()>(dir: &std::path::Path, f: F) {
         unsafe { std::env::set_var("SCARFF_TEMPLATES_DIR", dir) };
         f();
         unsafe { std::env::remove_var("SCARFF_TEMPLATES_DIR") };
     }
 
+    #[allow(unused)]
     fn seed_template(root: &std::path::Path, slot_name: &str) {
         let slot = root.join(slot_name);
         fs::create_dir_all(&slot).unwrap();
