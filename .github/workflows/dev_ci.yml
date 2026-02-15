@@ -17,20 +17,25 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v6.0.2
-      - uses: actions-rs/toolchain@v1.0.6
-      - uses: Swatinem/rust-cache@v2.8.2
-        with:
-          shared-key: preflight
+    - uses: actions/checkout@v4
 
-      - name: cargo fmt
-        run: cargo fmt --all -- --check
+    - uses: dtolnay/rust-toolchain@stable
+      with:
+        components: rustfmt, clippy
 
-      - name: cargo clippy
-        run: cargo clippy --workspace --all-targets --all-features -- -D warnings
+    - uses: Swatinem/rust-cache@v2
+      with:
+        shared-key: preflight
 
-      - name: cargo check
-        run: cargo check --workspace --all-targets --all-features
+    - name: cargo fmt
+      run: cargo fmt --all -- --check
+
+    - name: cargo clippy
+      run: cargo clippy --workspace --all-targets --all-features -- -D warnings
+
+    - name: cargo check
+      run: cargo check --workspace --all-targets --all-features
+
 
   # test
   test:
