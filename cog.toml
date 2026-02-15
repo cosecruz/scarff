@@ -1,0 +1,170 @@
+# cog.toml - Cocogitto 6.5.x compatible
+# Validated against: https://docs.cocogitto.io/config
+
+# =============================================================================
+# GLOBAL SETTINGS
+# =============================================================================
+
+# Start from latest tag (don't scan entire history)
+from_latest_tag = true
+
+# Ignore merge/fixup commits in changelog
+ignore_merge_commits = true
+ignore_fixup_commits = true
+
+# Changelog and bump behavior
+disable_changelog = false
+disable_bump_commit = false
+
+# Monorepo tag generation
+generate_mono_repository_global_tag = true
+generate_mono_repository_package_tags = true
+
+# Branch protection (only bump on these branches)
+branch_whitelist = ["main"]
+
+# CI skip marker
+skip_ci = "[skip ci]"
+skip_untracked = false
+
+# =============================================================================
+# BUMP HOOKS (Minimal, Safe)
+# =============================================================================
+
+# Run once before any version bump
+pre_bump_hooks = ["echo 'Starting version bump...'"]
+
+# Run after all bumps complete (NO AUTO-PUSH - manual control)
+post_bump_hooks = [
+  "echo 'Version bump complete. Review changes and push manually:'",
+  "echo '  git push && git push --tags'",
+]
+
+# Run before each package bump (in bump_order sequence)
+pre_package_bump_hooks = ["cargo check -p {{package}}"]
+
+# Run after each package bump
+post_package_bump_hooks = ["cargo test -p {{package}}"]
+
+# =============================================================================
+# GIT HOOKS (Lifecycle-Appropriate)
+# =============================================================================
+
+[git_hooks]
+
+# commit-msg: ONLY validate commit message format
+[git_hooks.commit-msg]
+script = """#!/bin/sh
+set -e
+# Verify the commit message follows conventional commits
+cog verify --file "$1"
+"""
+
+# pre-commit: Fast checks (formatting, doesn't block flow)
+[git_hooks.pre-commit]
+script = """#!/bin/sh
+set -e
+# Stash unstaged changes to avoid checking them
+git stash -q --keep-index --include-untracked
+
+# Check formatting (fast, local only)
+cargo fmt --all --check
+
+# Restore stashed changes
+git stash pop -q || true
+"""
+
+# pre-push: Comprehensive checks before sharing code
+[git_hooks.pre-push]
+script = """#!/bin/sh
+set -e
+# Run clippy (catches logic errors, slower but pre-push is right place)
+cargo clippy --workspace --all-targets -- -D warnings
+
+# Run tests (ensure nothing broken before push)
+cargo test --workspace --lib  # --lib for speed, integration tests in CI
+"""
+
+# =============================================================================
+# COMMIT TYPES (Conventional Commits Standard)
+# =============================================================================
+
+[commit_types]
+
+# Features: minor version bump
+feat = { changelog_title = "Features", bump_minor = true }
+
+# Fixes: patch version bump
+fix = { changelog_title = "Bug Fixes", bump_patch = true }
+
+# Refactoring: patch bump (behavior unchanged)
+refactor = { changelog_title = "Code Refactoring", bump_patch = true }
+
+# Performance: patch bump
+perf = { changelog_title = "Performance Improvements", bump_patch = true }
+
+# Security: patch bump (treat as fix)
+security = { changelog_title = "Security", bump_patch = true }
+
+# Tests: no bump, include in changelog
+test = { changelog_title = "Tests" }
+
+# Documentation: no bump, include in changelog
+docs = { changelog_title = "Documentation" }
+
+# Chores: no bump, include in changelog
+chore = { changelog_title = "Chores" }
+
+# CI/CD changes: no bump, include in changelog
+ci = { changelog_title = "CI/CD" }
+
+# Build system: no bump, include in changelog
+build = { changelog_title = "Build System" }
+
+# Reverts: patch bump (restoring previous state)
+revert = { changelog_title = "Reverts", bump_patch = true }
+
+# Deprecated: use `omit_from_changelog` for noise reduction
+style = { changelog_title = "Styling", omit_from_changelog = true }
+
+# =============================================================================
+# SCOPES (Workspace Crate Names)
+# =============================================================================
+
+# scopes = ["core", "adapters", "cli", "repo", "ci", "release", "deps"]
+
+# =============================================================================
+# CHANGELOG
+# =============================================================================
+
+[changelog]
+path = "CHANGELOG.md"
+template = "remote"
+remote = "github.com"
+repository = "scarff"
+owner = "oesisu"
+
+# =============================================================================
+# MONOREPO PACKAGES (CRITICAL - Define Your Workspace)
+# =============================================================================
+
+[packages.scarff-core]
+path = "./crates/scarff-core"
+public_api = true
+bump_order = 1                # Bump first: no internal dependencies
+
+[packages.scarff-adapters]
+path = "./crates/scarff-adapters"
+public_api = true
+bump_order = 2                    # Bump second: depends on core
+
+[packages.scarff-cli]
+path = "./crates/scarff-cli"
+public_api = true
+bump_order = 3               # Bump last: depends on core + adapter
+
+# =============================================================================
+# BUMP PROFILES (Optional - for advanced use)
+# =============================================================================
+
+[bump_profiles]
