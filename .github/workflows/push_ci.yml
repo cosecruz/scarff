@@ -1,20 +1,16 @@
-name: Rust
+name: Dev CI
 
 on:
   push:
-    branches: [ "main" ]
-  pull_request:
-    branches: [ "main" ]
+    branches: ["feature/*"]
 
 env:
   CARGO_TERM_COLOR: always
   RUST_BACKTRACE: 1
 
 jobs:
-
   # lint, fmt and checks
   preflight:
-
     name: Preflight (fmt + clippy + check)
     runs-on: ubuntu-latest
 
@@ -50,7 +46,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2.8.2
         with:
           shared-key: test-${{matrix.os}}
-          
+
       - name: cargo test (workspace)
         run: cargo test --workspace --all-features --all-targets
 
@@ -80,7 +76,6 @@ jobs:
       - run: cargo test --workspace --all-features --doc
   # build -dev
   build:
-  
     name: Dev Builds - ${{matrix.os}}
     needs:
       - preflight
@@ -96,6 +91,6 @@ jobs:
           - macOS-latest
 
     steps:
-    - uses: actions/checkout@v4
-    - name: Build
-      run: cargo build --verbose
+      - uses: actions/checkout@v4
+      - name: Build
+        run: cargo build --verbose
