@@ -10,8 +10,7 @@ pub fn execute(args: ListArgs, _global: GlobalArgs, output: OutputManager) -> Cl
     use scarff_adapters::InMemoryStore;
     use scarff_core::application::TemplateService;
 
-    let store =
-        Box::new(InMemoryStore::with_builtin().map_err(|e| crate::error::CliError::Core(e))?);
+    let store = Box::new(InMemoryStore::with_builtin().map_err(crate::error::CliError::Core)?);
 
     let service = TemplateService::new(store);
     let templates = service.list().map_err(crate::error::CliError::Core)?;

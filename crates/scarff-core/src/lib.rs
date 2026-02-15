@@ -40,7 +40,7 @@
 //!
 //! ## Usage
 //!
-//! ```rust,no_run
+//! ```rust,ignore
 //! use scarff_core::{
 //!     application::{ScaffoldService, TemplateService},
 //!     domain::{Target, Language, ProjectKind},

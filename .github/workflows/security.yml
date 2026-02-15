@@ -1,0 +1,111 @@
+name: Security
+
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+    branches: [main, dev]
+  schedule:
+    # Weekly Monday 08:00 UTC — catches newly-published CVEs between pushes
+    - cron: "0 8 * * 1"
+  workflow_dispatch:
+
+concurrency:
+  group: security-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ── cargo deny ───────────────────────────────────────────────────────────────
+  # Checks advisories, licences, bans, and sources across all 8 release targets.
+  # Mirrors: just lint → cargo deny check  /  make deny
+  # EmbarkStudios/cargo-deny-action v2 (current as of 2025)
+  deny:
+    name: cargo deny
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: EmbarkStudios/cargo-deny-action@v2
+        with:
+          command: check
+          arguments: --all-features
+
+  # ── cargo audit ──────────────────────────────────────────────────────────────
+  # RustSec advisory database scan against Cargo.lock.
+  # Mirrors: just audit → cargo audit  /  make audit
+  audit:
+    name: cargo audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # taiki-e/install-action v2 — installs cargo-audit from GitHub Releases
+      # with SHA256 verification (faster and more reliable than cargo install)
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-audit
+
+      - name: Run cargo audit
+        run: cargo audit --deny warnings --deny unsound
+
+  # ── Dependency review (PRs only) ─────────────────────────────────────────────
+  # GitHub built-in — highlights newly-added vulnerable deps in the PR diff.
+  # actions/dependency-review-action v4 (current as of 2025)
+  dependency-review:
+    name: Dependency Review
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/dependency-review-action@v4
+        with:
+          fail-on-severity: low
+          # Licence list matches deny.toml [licenses].allow exactly
+          allow-licenses: >-
+            MIT,
+            Apache-2.0,
+            BSD-2-Clause,
+            BSD-3-Clause,
+            ISC,
+            Unicode-DFS-2016,
+            Zlib,
+            CC0-1.0,
+            MPL-2.0
+
+  # ── Cargo.lock present ────────────────────────────────────────────────────────
+  # cargo audit and deny both require Cargo.lock to be committed.
+  # A missing lockfile is a supply-chain risk.
+  lockfile:
+    name: Cargo.lock committed
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify Cargo.lock exists and is tracked
+        run: |
+          if [ ! -f Cargo.lock ]; then
+            echo "::error::Cargo.lock is missing — commit it to the repository."
+            exit 1
+          fi
+          if git check-ignore -q Cargo.lock; then
+            echo "::error::Cargo.lock is in .gitignore — remove it."
+            exit 1
+          fi
+          echo "Cargo.lock is present and tracked."
+
+  # ── Aggregate gate ────────────────────────────────────────────────────────────
+  # Single status check for branch protection rules:
+  # require "security / Security gate" to pass before merging.
+  security-gate:
+    name: Security gate
+    needs: [deny, audit, lockfile]
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+      - name: All security checks passed
+        run: |
+          for result in "${{ needs.deny.result }}" "${{ needs.audit.result }}" "${{ needs.lockfile.result }}"; do
+            if [ "$result" != "success" ] && [ "$result" != "skipped" ]; then
+              echo "::error::A security job did not pass (result: $result)"
+              exit 1
+            fi
+          done
+          echo "Security gate passed."

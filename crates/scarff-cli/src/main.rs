@@ -27,7 +27,7 @@ use clap::Parser;
 use tracing::{debug, info, instrument};
 
 use crate::{
-    cli::{Cli, Commands, GlobalArgs},
+    cli::{Cli, Commands},
     config::AppConfig,
     error::{CliError, CliResult},
     logging::init_logging,

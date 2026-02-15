@@ -19,7 +19,7 @@ use std::io::IsTerminal as _;
 
 use tracing_subscriber::{EnvFilter, layer::SubscriberExt, util::SubscriberInitExt};
 
-use crate::cli::{GlobalArgs, OutputFormat};
+use crate::cli::GlobalArgs;
 
 /// Initialise the global tracing subscriber.
 ///
@@ -83,7 +83,7 @@ mod tests {
             quiet,
             no_color: true,
             config: None,
-            output_format: OutputFormat::Auto,
+            output_format: crate::cli::global::OutputFormat::Auto,
         }
     }
 
