@@ -1,0 +1,29 @@
+[jobs.check]
+command = [
+  "cargo",
+  "check",
+  "--workspace",
+  "--all-targets",
+  "--all-features",
+  "--color",
+  "always",
+]
+need_stdout = false
+watch = ["src", "tests"]
+
+
+[jobs.clippy]
+command = [
+  "cargo",
+  "clippy",
+  "--workspace",
+  "--all-targets",
+  "--",
+  "-D",
+  "warnings",
+]
+watch = ["tests"]
+
+[jobs.test]
+command = ["cargo", "test", "--all-features"]
+watch = ["src", "tests"]

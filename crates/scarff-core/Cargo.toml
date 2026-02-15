@@ -1,0 +1,31 @@
+[package]
+name = "scarff-core"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "Application core: domain, use cases, and ports"
+
+[dependencies]
+
+# Everything else is std library
+thiserror.workspace = true
+uuid = { workspace = true }
+tracing = { workspace = true }
+
+# Serialization (for future persistence)
+serde = { workspace = true, features = ["derive"] }
+
+
+[dev-dependencies]
+chrono = { workspace = true }
+mockall = { workspace = true }
+assert_cmd = { workspace = true }
+predicates = { workspace = true }
+# scarff_adapters = { path = "../scarff-adapters" }
+
+
+[lib]
+name = "scarff_core"
+path = "src/lib.rs"

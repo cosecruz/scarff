@@ -1,0 +1,79 @@
+[package]
+name = "scarff-cli"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "Command-line interface for Scarff project scaffolding tool"
+repository = "https://github.com/yourusername/scarff"
+keywords = ["cli", "scaffolding", "project-generator", "rust", "template"]
+categories = ["command-line-utilities", "development-tools"]
+
+[[bin]]
+name = "scarff"
+path = "src/main.rs"
+
+[dependencies]
+# Core dependencies
+scarff-core = { path = "../scarff-core" }
+scarff-adapters = { path = "../scarff-adapters" }
+
+# Error handling
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+
+# Async runtime (for future interactivity)
+# tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }
+
+# CLI parsing
+clap = { version = "4.5.58", features = [
+  "derive",
+  "cargo",
+  "env",
+  "unicode",
+  "wrap_help",
+  "string",
+] }
+clap_complete = "4.5.66" # Shell completion generation
+
+# Logging & tracing
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true, features = [
+  "env-filter",
+  "fmt",
+  "ansi",
+  "json",
+] }
+tracing-appender = "0.2.4" # File logging
+
+# Output formatting
+owo-colors = { version = "4.2", features = ["supports-colors"] }
+console = "0.16.2"
+indicatif = "0.18.3"
+dialoguer = { version = "0.12.0", features = ["fuzzy-select"], optional = true }
+
+# Configuration
+config = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+toml = "0.9.8"
+directories = "6.0.0"             # Cross-platform config/cache dirs
+dotenvy = "0.15.7"
+
+
+# Utilities
+chrono = { workspace = true }
+uuid = { workspace = true }
+
+[dev-dependencies]
+# Testing
+assert_cmd = { workspace = true }
+predicates = { workspace = true }
+tempfile = "3.25.0"
+mockall = { workspace = true }
+tokio-test = "0.4.5"
+
+[features]
+default = ["interactive"]
+interactive = ["dialoguer"]

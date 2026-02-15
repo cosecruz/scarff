@@ -1,0 +1,35 @@
+# Rust
+/target
+**/*.rs.bk
+*.pdb
+Cargo.lock
+
+# Environment
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Testing
+*.profraw
+cobertura.xml
+tarpaulin-report.html
+
+# Documentation
+/doc
+
+# templates
+/templates
+
+# Data
+/data
+*.db
+*.db-journal
