@@ -1,8 +1,6 @@
 name: Dev CI
 
 on:
-  push:
-    branches: ["main", "dev"]
   pull_request:
     branches: ["main", "dev"]
 
@@ -17,25 +15,24 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-    - uses: dtolnay/rust-toolchain@stable
-      with:
-        components: rustfmt, clippy
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
 
-    - uses: Swatinem/rust-cache@v2
-      with:
-        shared-key: preflight
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: preflight
 
-    - name: cargo fmt
-      run: cargo fmt --all -- --check
+      - name: cargo fmt
+        run: cargo fmt --all -- --check
 
-    - name: cargo clippy
-      run: cargo clippy --workspace --all-targets --all-features -- -D warnings
+      - name: cargo clippy
+        run: cargo clippy --workspace --all-targets --all-features -- -D warnings
 
-    - name: cargo check
-      run: cargo check --workspace --all-targets --all-features
-
+      - name: cargo check
+        run: cargo check --workspace --all-targets --all-features
 
   # test
   test:
@@ -49,15 +46,15 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-      
+
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
-          
+
       - uses: Swatinem/rust-cache@v2
         with:
           shared-key: test-${{matrix.os}}
-          
+
       - name: cargo test (workspace)
         run: cargo test --workspace --all-features --all-targets
 
