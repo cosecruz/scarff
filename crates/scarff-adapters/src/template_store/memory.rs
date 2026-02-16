@@ -111,8 +111,7 @@ impl TemplateStore for InMemoryStore {
 
     fn insert(&self, template: Template) -> ScarffResult<()> {
         // Validate before insertion
-        validator::validate_template(&template)
-            .map_err(|e| scarff_core::error::ScarffError::Domain(e))?;
+        validator::validate_template(&template).map_err(scarff_core::error::ScarffError::Domain)?;
 
         let mut inner = self
             .inner
@@ -134,11 +133,11 @@ impl TemplateStore for InMemoryStore {
             .write()
             .map_err(|_| scarff_core::application::ApplicationError::StoreLockError)?;
 
-        inner.remove(id).ok_or_else(|| {
+        let _ = inner.remove(id).ok_or(
             scarff_core::application::ApplicationError::TemplateResolution {
                 reason: format!("Template not found: {}", id),
-            };
-        });
+            },
+        );
 
         Ok(())
     }

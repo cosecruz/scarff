@@ -1,41 +1,50 @@
-# Install: cargo install cargo-deny
+# # cargo-deny configuration
+# # Install: cargo install cargo-deny
+# # Run:     cargo deny check
+# #
+# # This file is checked on every PR by the CI workflow.
+
 [graph]
+# cargo-deny is really only ever intended to run on the "normal" tier-1 targets
 targets = [
-  { triple = "x86_64-unknown-linux-gnu" },
-  { triple = "aarch64-apple-darwin" },
+  "x86_64-unknown-linux-gnu",
+  "aarch64-unknown-linux-gnu",
+  "x86_64-unknown-linux-musl",
+  "aarch64-apple-darwin",
+  "x86_64-apple-darwin",
+  "x86_64-pc-windows-msvc",
 ]
+all-features = true
+
 
 [advisories]
-version = 2
-db-path = "~/.cargo/advisory-db"
 db-urls = ["https://github.com/rustsec/advisory-db"]
-yanked = "warn"
+unmaintained = "workspace"
+unsound = "all"
 ignore = []
 
-[licenses]
-version = 2
-confidence-threshold = 0.8
-allow = [
-  "MIT",
-  "Apache-2.0",
-  "Apache-2.0 WITH LLVM-exception",
-  "BSD-2-Clause",
-  "BSD-3-Clause",
-  "ISC",
-  "Unicode-DFS-2016",
-  "MPL-2.0",
-]
-exceptions = []
 
 [bans]
 multiple-versions = "warn"
-wildcards = "allow"                  # Workspace uses wildcards intentionally
+wildcards = "allow"
 highlight = "all"
-workspace-default-features = "allow"
-external-default-features = "allow"
+
 
 [sources]
-unknown-registry = "warn"
-unknown-git = "warn"
-allow-registry = ["https://github.com/rust-lang/crates.io-index"]
-allow-git = []
+unknown-registry = "deny"
+unknown-git = "deny"
+
+[licenses]
+# We want really high confidence when inferring licenses from text
+confidence-threshold = 0.93
+allow = [
+  "Apache-2.0",
+  "Apache-2.0 WITH LLVM-exception",
+  "MIT",
+  "BSD-3-Clause",
+  "ISC",
+  "Unicode-3.0",
+  "Zlib",
+  "MPL-2.0",
+]
+exceptions = []

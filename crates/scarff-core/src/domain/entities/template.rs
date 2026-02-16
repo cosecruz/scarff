@@ -81,13 +81,13 @@
 //! The current design supports these future features without breaking changes:
 //!
 //! ### Template Hub / Remote Registry
-//! ```rust
+//! ```rust, ignore
 //! // Add to TemplateSource:
 //! Remote { url: Url, etag: String, cached_at: DateTime }
 //! ```
 //!
 //! ### Conditional Rendering
-//! ```rust
+//! ```rust, ignore
 //! // Add to TemplateContent:
 //! Conditional {
 //!     condition: String, // "{{FEATURE_X}}"
@@ -97,13 +97,13 @@
 //! ```
 //!
 //! ### Template Composition (Inheritance)
-//! ```rust
+//! ```rust, ignore
 //! // Add to TemplateTree:
 //! Extend { base: TemplateId, overrides: Vec<TemplateNode> }
 //! ```
 //!
 //! ### Live Reloading
-//! ```rust
+//! ```rust, ignore
 //! // Add to TemplateSource:
 //! Watched { path: PathBuf, last_modified: SystemTime }
 //! ```
@@ -201,6 +201,7 @@ pub trait TemplateEngine: Send + Sync {
 pub struct RenderContext {
     /// Original project name as provided by user.
     /// Kept separate from variables for debugging and display purposes.
+    #[allow(unused)]
     project_name: String,
 
     /// Variable map for substitution.
@@ -426,7 +427,7 @@ fn split_words(input: &str) -> Vec<String> {
             // Detected by: Uppercase, Next is Uppercase, Next+1 is Lowercase
             if c.is_uppercase()
                 && next.is_uppercase()
-                && chars.clone().nth(1).map_or(false, |n| n.is_lowercase())
+                && chars.clone().nth(1).is_some_and(|n| n.is_lowercase())
             {
                 current.push(c);
                 words.push(current.to_lowercase());
@@ -761,13 +762,13 @@ impl TemplateBuilder {
         Ok(Template {
             id: self
                 .id
-                .ok_or_else(|| DomainError::MissingRequiredField { field: "id" })?,
+                .ok_or(DomainError::MissingRequiredField { field: "id" })?,
             matcher: self
                 .matcher
-                .ok_or_else(|| DomainError::MissingRequiredField { field: "matcher" })?,
+                .ok_or(DomainError::MissingRequiredField { field: "matcher" })?,
             metadata: self
                 .metadata
-                .ok_or_else(|| DomainError::MissingRequiredField { field: "metadata" })?,
+                .ok_or(DomainError::MissingRequiredField { field: "metadata" })?,
             tree: self.tree,
         })
     }
@@ -851,14 +852,10 @@ impl TargetMatcher {
     /// `language=Python` and `framework=Axum` would not match any real target
     /// because Axum implies Rust).
     pub fn matches(&self, target: &Target) -> bool {
-        self.language.map_or(true, |l| l == target.language())
-            && self
-                .framework
-                .map_or(true, |f| Some(f) == target.framework())
-            && self.kind.map_or(true, |k| k == target.kind())
-            && self
-                .architecture
-                .map_or(true, |a| a == target.architecture())
+        self.language.is_none_or(|l| l == target.language())
+            && self.framework.is_none_or(|f| Some(f) == target.framework())
+            && self.kind.is_none_or(|k| k == target.kind())
+            && self.architecture.is_none_or(|a| a == target.architecture())
     }
 
     /// Calculate specificity score (higher = more specific).

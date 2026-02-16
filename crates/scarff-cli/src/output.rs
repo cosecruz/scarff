@@ -10,12 +10,14 @@ use crate::config::AppConfig;
 
 /// Manages CLI output based on configuration.
 pub struct OutputManager {
+    #[allow(unused)]
     resolved_format: OutputFormat,
     quiet: bool,
     no_color: bool,
     term: Term,
 }
 
+#[allow(unused)]
 impl OutputManager {
     /// Build an `OutputManager` from parsed CLI flags and loaded config.
     pub fn new(args: &GlobalArgs, config: &AppConfig) -> Self {

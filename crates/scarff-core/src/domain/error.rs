@@ -2,7 +2,6 @@
 // domain/errors.rs - COMPREHENSIVE ERROR DOMAIN
 // ============================================================================
 
-use std::path::PathBuf;
 use thiserror::Error;
 
 /// Root domain error type.
@@ -82,7 +81,7 @@ impl DomainError {
                 format!("Details: {}", msg),
             ],
             Self::IncompatibleLanguageKind { language, kind, reason } => vec![
-                format!("{} projects typically use:", kind),
+                format!("{} is not capable of {} projects, reason: {} ", language, kind, reason),
                 match kind.as_str() {
                     "cli" => "  • Rust, Python, Go".into(),
                     "web-backend" => "  • Rust (Axum/Actix), Python (FastAPI/Django), TypeScript (Express/NestJS)".into(),

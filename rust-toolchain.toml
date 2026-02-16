@@ -1,10 +1,35 @@
 [toolchain]
+# Pin to stable.
+# Renovate / Dependabot will not update this automatically — it must be bumped
+# manually when you want to adopt a new stable release.
 channel = "stable"
-components = ["rustfmt", "clippy", "rust-src", "llvm-tools-preview"]
-targets = [
-  "x86_64-unknown-linux-gnu",
-  "x86_64-apple-darwin",
-  "aarch64-apple-darwin",
-  "x86_64-pc-windows-msvc",
+
+# Components required for local development.
+# CI also installs these via dtolnay/rust-toolchain@stable.
+components = [
+  "rustfmt",
+  "clippy",
+  "rust-src",
+  "llvm-tools-preview", # Required by cargo-llvm-cov for coverage
 ]
+
+# All targets that developers may need locally or that CI cross-compiles.
+# Omitting a target here does NOT break CI — cross installs its own sysroots
+# inside Docker. These are for native `cargo build --target` on a dev machine.
+targets = [
+  # ── Linux ──────────────────────────────────────────────────────────────────
+  "x86_64-unknown-linux-gnu",   # Standard Linux (most CI agents and servers)
+  "x86_64-unknown-linux-musl",  # Static musl binary (Alpine, Docker scratch)
+  "aarch64-unknown-linux-gnu",  # ARM64 Linux (Raspberry Pi 4, AWS Graviton)
+  "aarch64-unknown-linux-musl", # ARM64 static musl (Alpine on ARM)
+
+  # ── macOS ──────────────────────────────────────────────────────────────────
+  "x86_64-apple-darwin",  # Intel Mac
+  "aarch64-apple-darwin", # Apple Silicon (M1/M2/M3/M4)
+
+  # ── Windows ────────────────────────────────────────────────────────────────
+  "x86_64-pc-windows-msvc",  # Windows 64-bit (most common)
+  "aarch64-pc-windows-msvc", # Windows ARM64 (Surface Pro X, Snapdragon laptops)
+]
+
 profile = "default"

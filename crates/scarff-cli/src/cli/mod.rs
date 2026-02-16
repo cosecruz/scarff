@@ -3,12 +3,10 @@
 //! This module is the *only* place that knows about argument names, aliases,
 //! help text, and value enums.  No business logic lives here.
 
-use std::path::PathBuf;
-
 use clap::{Args, Parser, Subcommand, ValueEnum};
 
 pub mod global;
-pub use global::{GlobalArgs, OutputFormat};
+pub use global::GlobalArgs;
 
 // ── Top-level CLI ─────────────────────────────────────────────────────────────
 
@@ -267,6 +265,8 @@ pub enum Shell {
     Bash,
     Zsh,
     Fish,
+
+    #[allow(clippy::enum_variant_names)]
     PowerShell,
     Elvish,
 }

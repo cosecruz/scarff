@@ -5,9 +5,8 @@ use std::path::Path;
 use scarff_core::{
     application::ports::TemplateRenderer,
     domain::{
-        DirectoryToCreate, DomainValidator as validator, FileSpec, FileToWrite, FsEntry,
-        Permissions, ProjectStructure, RenderContext, Template, TemplateContent, TemplateNode,
-        TemplateSource,
+        DomainValidator as validator, ProjectStructure, RenderContext, Template, TemplateContent,
+        TemplateNode,
     },
     error::ScarffResult,
 };
