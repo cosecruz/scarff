@@ -4,88 +4,47 @@
 # #
 # # This file is checked on every PR by the CI workflow.
 
-# [graph]
-# # Check all targets that Scarff ships for.
-# # Missing a target here means vulnerabilities or licence violations on that
-# # platform will not be caught.
-# targets = [
-#   { triple = "x86_64-unknown-linux-gnu" },
-#   { triple = "x86_64-unknown-linux-musl" },
-#   { triple = "aarch64-unknown-linux-gnu" },
-#   { triple = "aarch64-unknown-linux-musl" },
-#   { triple = "x86_64-apple-darwin" },
-#   { triple = "aarch64-apple-darwin" },
-#   { triple = "x86_64-pc-windows-msvc" },
-#   { triple = "aarch64-pc-windows-msvc" },
-# ]
+[graph]
+# cargo-deny is really only ever intended to run on the "normal" tier-1 targets
+targets = [
+  "x86_64-unknown-linux-gnu",
+  "aarch64-unknown-linux-gnu",
+  "x86_64-unknown-linux-musl",
+  "aarch64-apple-darwin",
+  "x86_64-apple-darwin",
+  "x86_64-pc-windows-msvc",
+]
+all-features = true
 
-# # ── Advisories ────────────────────────────────────────────────────────────────
-# [advisories]
-# version = 2
-# # Fetch the RustSec advisory database on every run.
-# db-urls = ["https://github.com/rustsec/advisory-db"]
-# # Yanked crates: warn (don't fail) — they aren't security issues per se.
-# yanked = "warn"
-# # No ignored advisories. If you must ignore one, document why inline:
-# #   ignore = [{ id = "RUSTSEC-2020-1234", reason = "only triggers on 32-bit" }]
-# ignore = []
 
-# # ── Licences ──────────────────────────────────────────────────────────────────
-# [licenses]
-# version = 2
-# confidence-threshold = 0.8
-# # Explicit allowlist — deny everything else.
-# # If a new dep has a licence not listed here, CI fails with a clear error.
-# allow = [
-#   "MIT",
-#   "Apache-2.0",
-#   "Apache-2.0 WITH LLVM-exception", # LLVM-derived crates (e.g. inkwell)
-#   "BSD-3-Clause",
-#   "ISC",
-#   "Unicode-DFS-2016",               # Unicode character tables
-#   "Zlib",
-#   "CC0-1.0",                        # Public domain equivalent
-#   "MPL-2.0",                        # Mozilla Public License (weak copyleft, compatible)
-# ]
-# # Copyleft (GPL, AGPL, LGPL) is disallowed. If a dep requires it, that dep
-# # must be replaced or a legal review must explicitly permit it.
+[advisories]
+db-urls = ["https://github.com/rustsec/advisory-db"]
+unmaintained = "workspace"
+unsound = "all"
+ignore = []
 
-# exceptions = []
 
-# # ── Bans ──────────────────────────────────────────────────────────────────────
-# [bans]
-# # Multiple versions of the same crate bloat the binary and are often
-# # avoidable. Warn, don't deny — some are transitive and unavoidable.
-# multiple-versions = "warn"
+[bans]
+multiple-versions = "warn"
+wildcards = "allow"
+highlight = "all"
 
-# # Wildcards in dependencies are fine in workspace internal crates.
-# wildcards = "allow"
 
-# highlight = "all"
-# workspace-default-features = "allow"
-# external-default-features = "allow"
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
 
-# deny = [
-#   # atty is unmaintained and contains unsound code (RUSTSEC-2021-0145).
-#   # Scarff uses std::io::IsTerminal (stable since Rust 1.70) instead.
-#   { name = "atty" },
-
-#   # Old chrono had CVE-2020-26235 (unsound `localtime_r` call in multithreaded code).
-#   # Any chrono < 0.4.20 is vulnerable. We require 0.4.20+.
-#   { name = "chrono", version = "<0.4.20" },
-
-#   # openssl-sys requires a C compiler and OpenSSL headers at build time.
-#   # This breaks cross-compilation and musl static builds.
-#   # Use rustls for TLS if/when Scarff needs HTTPS (e.g. template registry).
-#   { name = "openssl-sys" },
-#   { name = "openssl" },
-# ]
-
-# # ── Sources ───────────────────────────────────────────────────────────────────
-# [sources]
-# # Only crates.io is allowed as a dependency source.
-# # No surprise git deps in production code.
-# unknown-registry = "deny"
-# unknown-git = "deny"
-# allow-registry = ["https://github.com/rust-lang/crates.io-index"]
-# allow-git = []
+[licenses]
+# We want really high confidence when inferring licenses from text
+confidence-threshold = 0.93
+allow = [
+  "Apache-2.0",
+  "Apache-2.0 WITH LLVM-exception",
+  "MIT",
+  "BSD-3-Clause",
+  "ISC",
+  "Unicode-3.0",
+  "Zlib",
+  "MPL-2.0",
+]
+exceptions = []

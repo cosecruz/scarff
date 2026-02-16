@@ -45,7 +45,6 @@ tracing-subscriber = { workspace = true, features = [
   "ansi",
   "json",
 ] }
-tracing-appender = "0.2.4" # File logging
 
 # Output formatting
 owo-colors = { version = "4.2", features = ["supports-colors"] }
