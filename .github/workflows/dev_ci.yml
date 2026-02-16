@@ -48,12 +48,16 @@ jobs:
         os: [ubuntu-latest, windows-latest, macOS-latest]
 
     steps:
-      - uses: actions/checkout@v6.0.2
-      - uses: actions-rs/toolchain@v1.0.6
-      - uses: Swatinem/rust-cache@v2.8.2
+      - uses: actions/checkout@v4
+      
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+          
+      - uses: Swatinem/rust-cache@v2
         with:
           shared-key: test-${{matrix.os}}
-
+          
       - name: cargo test (workspace)
         run: cargo test --workspace --all-features --all-targets
 
