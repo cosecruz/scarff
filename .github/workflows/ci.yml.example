@@ -1,0 +1,167 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main, dev]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: 0
+  RUST_BACKTRACE: 1
+
+jobs:
+  # ── 1. Preflight ─────────────────────────────────────────────────────────────
+  # Fast fail: fmt + clippy + check before spinning up 4 OS runners.
+  # Mirrors: just lint  /  cog pre-push hook
+  preflight:
+    name: Preflight (fmt + clippy + check)
+    runs-on: ubuntu-latest
+    steps:
+      # actions/checkout — v4 (v3 deprecated Jan 2025; v6 requires Node 24 runners)
+      - uses: actions/checkout@v4
+
+      # dtolnay/rust-toolchain — no numeric tag by design; @stable reads rust-toolchain.toml
+      - uses: dtolnay/rust-toolchain@stable
+
+      # Swatinem/rust-cache — v2 (latest: v2.8.2, Nov 2025)
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: preflight
+
+      - name: cargo fmt
+        run: cargo fmt --all -- --check
+
+      - name: cargo clippy
+        run: cargo clippy --workspace --all-targets --all-features -- -D warnings
+
+      - name: cargo check
+        run: cargo check --workspace --all-targets --all-features
+
+  # ── 2. Test matrix ───────────────────────────────────────────────────────────
+  # Mirrors: just test / just test_core / just test_adapters / just test_cli
+  test:
+    name: Tests · ${{ matrix.os }}
+    needs: preflight
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-latest # x86_64-unknown-linux-gnu
+          - macos-14 # aarch64-apple-darwin (Apple Silicon)
+          - macos-13 # x86_64-apple-darwin  (Intel)
+          - windows-latest # x86_64-pc-windows-msvc
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: test-${{ matrix.os }}
+
+      - name: cargo test (workspace)
+        run: cargo test --workspace --all-features --all-targets
+
+      - name: cargo test scarff-core
+        run: cargo test -p scarff-core --all-features
+
+      - name: cargo test scarff-adapters
+        run: cargo test -p scarff-adapters --all-features
+
+      - name: cargo test scarff-cli
+        run: cargo test -p scarff-cli --all-features
+
+  # ── 3. MSRV ──────────────────────────────────────────────────────────────────
+  # Cargo.toml: rust-version = "1.85"
+  msrv:
+    name: MSRV (Rust 1.85)
+    needs: preflight
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # @master required when passing explicit toolchain input (per dtolnay README)
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: "1.85"
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: msrv
+      - run: cargo check --workspace --all-features
+
+  # ── 4. Coverage ──────────────────────────────────────────────────────────────
+  # cargo-llvm-cov → Codecov v5 (current; v4 deprecated)
+  coverage:
+    name: Coverage
+    needs: preflight
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write # codecov-action v5 OIDC
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: llvm-tools-preview
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: coverage
+
+      # taiki-e/install-action v2 — verified SHA256, installs from GitHub Releases
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-llvm-cov
+
+      - name: Generate coverage
+        run: cargo llvm-cov --workspace --all-features --lcov --output-path coverage.lcov
+
+      # codecov-action v5 (current; uses OIDC by default for public repos)
+      - uses: codecov/codecov-action@v5
+        with:
+          files: coverage.lcov
+          fail_ci_if_error: false
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+
+  # ── 5. Doc tests ─────────────────────────────────────────────────────────────
+  docs:
+    name: Doc tests
+    needs: preflight
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: docs
+      - run: cargo test --workspace --all-features --doc
+
+  # ── 6. Conventional commits ───────────────────────────────────────────────────
+  # PRs only — validates every commit, mirroring the local commit-msg hook (cog verify).
+  conventional-commits:
+    name: Conventional Commits
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cocogitto
+
+      - name: Validate commits
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          git log --format="%s" "$BASE..$HEAD" | while read -r msg; do
+            if ! cog verify "$msg" 2>/dev/null; then
+              echo "::error::Non-conventional commit: $msg"
+              exit 1
+            fi
+          done

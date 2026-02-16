@@ -3,10 +3,7 @@
 //! These traits define what the application needs from external systems.
 //! The `scarff-adapters` crate provides implementations.
 
-use crate::application::ApplicationError;
-use crate::domain::{
-    ProjectStructure, RenderContext, Target, Template, TemplateId, TemplateRecord,
-};
+use crate::domain::{ProjectStructure, RenderContext, Target, Template, TemplateId};
 use crate::error::ScarffResult;
 use std::path::Path;
 

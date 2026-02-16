@@ -4,7 +4,7 @@
 //! Separated from ScaffoldService for single responsibility.
 
 use crate::{
-    application::{ApplicationError, ports::TemplateStore},
+    application::ports::TemplateStore,
     domain::{Target, Template, TemplateId},
     error::ScarffResult,
 };

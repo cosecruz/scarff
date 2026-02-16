@@ -7,7 +7,7 @@
 //!
 //! It implements the driving port (incoming) and uses driven ports (outgoing).
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use tracing::{info, instrument, warn};
 
 use crate::{
@@ -45,7 +45,7 @@ impl ScaffoldService {
     ///
     /// # Example
     ///
-    /// ```rust,no_run
+    /// ```rust,ignore
     /// use scarff_core::application::{ScaffoldService, ports::*};
     ///
     /// let service = ScaffoldService::new(

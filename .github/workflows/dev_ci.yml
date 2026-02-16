@@ -1,0 +1,107 @@
+name: Dev CI
+
+on:
+  push:
+    branches: ["main", "dev"]
+  pull_request:
+    branches: ["main", "dev"]
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+jobs:
+  # lint, fmt and checks
+  preflight:
+    name: Preflight (fmt + clippy + check)
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - uses: dtolnay/rust-toolchain@stable
+      with:
+        components: rustfmt, clippy
+
+    - uses: Swatinem/rust-cache@v2
+      with:
+        shared-key: preflight
+
+    - name: cargo fmt
+      run: cargo fmt --all -- --check
+
+    - name: cargo clippy
+      run: cargo clippy --workspace --all-targets --all-features -- -D warnings
+
+    - name: cargo check
+      run: cargo check --workspace --all-targets --all-features
+
+
+  # test
+  test:
+    name: Tests - ${{matrix.os}}
+    needs: preflight
+    runs-on: ${{matrix.os}}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macOS-latest]
+
+    steps:
+      - uses: actions/checkout@v4
+      
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+          
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: test-${{matrix.os}}
+          
+      - name: cargo test (workspace)
+        run: cargo test --workspace --all-features --all-targets
+
+      - name: cargo test scarff-core
+        run: cargo test -p scarff-core --all-features
+
+      - name: cargo test scarff-adapters
+        run: cargo test -p scarff-adapters --all-features
+
+      - name: cargo test scarff-cli
+        run: cargo test -p scarff-cli --all-features
+
+  # msrv
+  # deny
+  # coverage
+  # doc tests
+  docs:
+    name: Doc tests
+    needs: preflight
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: docs
+      - run: cargo test --workspace --all-features --doc
+  # build -dev
+  build:
+    name: Dev Builds - ${{matrix.os}}
+    needs:
+      - preflight
+      - test
+    runs-on: ${{matrix.os}}
+    strategy:
+      fail-fast: true
+      max-parallel: 3
+      matrix:
+        os:
+          - ubuntu-latest
+          - windows-latest
+          - macOS-latest
+
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build
+        run: cargo build --verbose

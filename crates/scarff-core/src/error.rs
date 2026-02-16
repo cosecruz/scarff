@@ -3,7 +3,6 @@
 //! This module provides a unified error type that wraps domain and application
 //! errors, with rich context and user-actionable suggestions.
 
-use std::path::PathBuf;
 use thiserror::Error;
 
 use crate::application::ApplicationError;
