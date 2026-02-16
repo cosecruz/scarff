@@ -1,0 +1,61 @@
+# ============================================================
+# Feature CI
+#
+# ROLE:
+# - Fast feedback for short-lived branches (feature/*)
+# - Catch formatting, lint, and obvious test failures
+# - Must be cheap and quick (< 3 minutes)
+#
+# WHAT IT MUST NOT DO:
+# - No cross-platform testing
+# - No MSRV checks
+# - No dependency audits
+# - No publishing
+#
+# TRIGGERS:
+# - Push to feature/*
+# - PR into dev
+# ============================================================
+
+name: Feature CI
+
+on:
+  push:
+    branches:
+      - "feature/**"
+      - "fix/**"
+      - "chore/**"
+      - "docs/**"
+  pull_request:
+    branches:
+      - dev
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+jobs:
+  fast-check:
+    name: Fast checks (fmt + clippy + test)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Install Rust (stable)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Cache Cargo
+        uses: Swatinem/rust-cache@v2
+
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+
+      - name: Lint (clippy)
+        run: cargo clippy --workspace --all-targets -- -D warnings
+
+      - name: Run tests (Linux only)
+        run: cargo test --workspace
