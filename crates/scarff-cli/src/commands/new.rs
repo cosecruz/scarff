@@ -1,7 +1,12 @@
 //! Implementation of the `scarff new` command.
 //!
-//! Responsibility: translate CLI arguments into a `Target`, call the core
-//! scaffold service, and display results. No business logic lives here.
+//! Invariants enforced here (RFC-0001 §6):
+//! 1. Determinism        — delegated to domain builder
+//! 2. Fail-fast          — validation and path check before any output
+//! 3. No partial state   — delegated to `ScaffoldService` (rollback on failure)
+//! 4. Runnable default   — delegated to the template layer
+//! 5. Transparent infer  — `UserChoices` tracks what the user provided
+//! 6. Override wins      — explicit flags fed directly to the builder
 
 use std::path::{Path, PathBuf};
 
@@ -23,6 +28,19 @@ use crate::{
     output::OutputManager,
 };
 
+// ── UserChoices ───────────────────────────────────────────────────────────────
+
+/// Records which flags the user explicitly provided before the domain
+/// builder infers defaults. Used by `show_configuration` to mark inferred
+/// values, satisfying RFC-0001 §6.5 ("transparent inference").
+#[derive(Debug, Default)]
+struct UserChoices {
+    language: bool,
+    kind: bool,
+    framework: bool,
+    architecture: bool,
+}
+
 /// Execute the `scarff new` command.
 ///
 /// Dispatch sequence:
@@ -39,37 +57,53 @@ pub fn execute(
     config: AppConfig,
     output: OutputManager,
 ) -> CliResult<()> {
-    // 1. Resolve project path
+    debug!(
+        dry_run = args.dry_run,
+        yes = args.yes,
+        force = args.force,
+        // default = args.default,
+        "scarff new started"
+    );
+
+    // Step 1 — Resolve and validate the project path name.
     let (project_name, output_dir) = resolve_project_path(&args.name)?;
     validate_project_name(&project_name)?;
 
-    // 2. Build target (inference + validation)
-    let target = build_target(&args, &config)?;
+    // Step 2 — Build and fully validate the domain target.
+    // All domain errors surface here, before we show anything.
+    let (target, choices) = build_target(&args, &config)?;
 
-    debug!(
+    info!(
         language = %target.language(),
-        kind = %target.kind(),
-        architecture = %target.architecture(),
-        framework = target.framework().map(|f| f.to_string()).as_deref().unwrap_or("none"),
-        "Target resolved"
+        kind     = %target.kind(),
+        arch     = %target.architecture(),
+        "Target built"
     );
 
-    // 3. Show configuration and confirm
-    if !global.quiet && !args.yes {
-        show_configuration(&target, &project_name, &output_dir, &output)?;
-        if !confirm()? {
-            return Err(CliError::Cancelled);
-        }
-    }
-
-    // 4. Check for existing directory
+    // Step 3 — Check path existence before asking the user anything.
+    // RFC §6.2: errors must occur before filesystem writes — and before
+    // the user is asked to confirm, which is also a form of output.
     let project_path = output_dir.join(&project_name);
     if project_path.exists() && !args.force {
         return Err(CliError::ProjectExists { path: project_path });
     }
 
-    // 5. Dry run: describe but do not write.
+    // Step 4 — Show the resolved configuration.
+    // RFC §8: dry-run output must be identical to a real run, so we always
+    // show this panel — the dry-run short-circuit comes later.
+    if !global.quiet {
+        show_configuration(&target, &choices, &project_name, &project_path, &output)?;
+    }
+
+    // Step 5 — Confirm (skipped by --yes, --default, or --dry-run).
+    if !global.quiet && !args.yes && !args.dry_run && !confirm()? {
+        return Err(CliError::Cancelled);
+    }
+
+    // Step 6 — Dry-run short-circuit.
+    // RFC §8: explicit notice after the config panel.
     if args.dry_run {
+        output.info("Dry run — no files were written.")?;
         output.info(&format!(
             "Dry run: would create '{}' at {}",
             project_name,
@@ -84,29 +118,24 @@ pub fn execute(
         return Ok(());
     }
 
-    // 6. Create adapters and scaffold
+    // Step 7 — Execute scaffolding.
+    output.header(&format!("Creating project '{project_name}'..."))?;
+
     let store = Box::new(InMemoryStore::with_builtin().map_err(CliError::Core)?);
     let renderer = Box::new(SimpleRenderer::new());
     let filesystem = Box::new(LocalFilesystem::new());
     let service = ScaffoldService::new(store, renderer, filesystem);
 
-    output.header(&format!("Creating '{project_name}'..."))?;
-    info!(project = %project_name, path = %project_path.display(), "Scaffold started");
-
     service
-        .scaffold(target, &project_name, &output_dir)
+        .scaffold(target.clone(), &project_name, &output_dir)
         .map_err(CliError::Core)?;
 
-    info!(project = %project_name, "Scaffold completed");
-
-    // 7. Success + next steps
-    output.success(&format!("Project '{project_name}' created!"))?;
+    // Step 8 — Success output.
+    output.success(&format!("Project '{project_name}' created successfully!"))?;
 
     if !global.quiet {
         output.print("")?;
-        output.print("Next steps:")?;
-        output.print(&format!("  cd {project_name}"))?;
-        output.print("  # Start building!")?;
+        show_next_steps(&target, &project_name, &output)?;
     }
 
     Ok(())
@@ -159,30 +188,58 @@ fn validate_project_name(name: &str) -> CliResult<()> {
     Ok(())
 }
 
-// ── Target construction ───────────────────────────────────────────────────────
+// ── build_target ──────────────────────────────────────────────────────────────
 
-fn build_target(args: &NewArgs, _config: &AppConfig) -> CliResult<Target> {
+/// Translate CLI arguments into a validated `Target`, recording which fields
+/// the user explicitly provided vs what the domain builder will infer.
+fn build_target(args: &NewArgs, _config: &AppConfig) -> CliResult<(Target, UserChoices)> {
+    let mut choices = UserChoices::default();
+
+    //todo:  Language — required unless --default falls back to config.
+    // let lang_cli = if args.default && args.language.is_none() {
+    //     config
+    //         .defaults
+    //         .language
+    //         .as_deref()
+    //         .and_then(|s| s.parse::<Language>().ok())
+    //         .unwrap_or(Language::Rust)
+    // } else {
+    //     args.language.ok_or_else(|| CliError::MissingRequiredFlag {
+    //         flag: "--lang / -l".into(),
+    //         hint: "Specify a language (e.g. --lang rust) or use --default.".into(),
+    //     })?
+    // };
+    // choices.language = args.language.is_some();
+
     let lang = convert_language(args.language);
+    choices.language = true;
     let mut builder = Target::builder().language(lang);
 
     if let Some(kind) = args.kind {
+        choices.kind = args.kind.is_some();
         builder = builder
             .kind(convert_kind(kind))
             .map_err(|e| CliError::Core(e.into()))?;
     }
 
-    if let Some(fw_str) = &args.framework {
+    // Framework — optional.
+    if let Some(ref fw_str) = args.framework {
+        choices.framework = true;
         let fw = parse_framework(args.language, fw_str)?;
         builder = builder
             .framework(fw)
             .map_err(|e| CliError::Core(e.into()))?;
     }
 
+    // Architecture — optional.
     if let Some(arch) = args.architecture {
-        builder = builder.architecture(convert_architecture(arch));
+        choices.architecture = true;
+        let core_arch = convert_architecture(arch);
+        builder = builder.architecture(core_arch);
     }
 
-    builder.build().map_err(|e| CliError::Core(e.into()))
+    let target = builder.build().map_err(|e| CliError::Core(e.into()))?;
+    Ok((target, choices))
 }
 
 // ── Type conversions CLI → core ───────────────────────────────────────────────
@@ -248,21 +305,120 @@ fn parse_framework(lang: Language, fw: &str) -> CliResult<CoreFramework> {
 
 // ── UI helpers ────────────────────────────────────────────────────────────────
 
+// ── Output helpers ────────────────────────────────────────────────────────────
+
+/// Print the resolved configuration panel.
+///
+/// Marks inferred values with `(inferred)` — RFC-0001 §6.5.
 fn show_configuration(
     target: &Target,
+    choices: &UserChoices,
     name: &str,
-    output_dir: &Path,
+    project_path: &Path,
     out: &OutputManager,
 ) -> CliResult<()> {
-    out.header("Configuration")?;
+    let inferred = |explicit: bool| if explicit { "" } else { "  (inferred)" };
+
+    out.header("Configuration:")?;
     out.print(&format!("  Project:      {name}"))?;
-    out.print(&format!("  Language:     {}", target.language()))?;
-    out.print(&format!("  Kind:         {}", target.kind()))?;
-    out.print(&format!("  Architecture: {}", target.architecture()))?;
-    if let Some(fw) = target.framework() {
-        out.print(&format!("  Framework:    {fw}"))?;
+    out.print(&format!(
+        "  Language:     {}{}",
+        target.language(),
+        inferred(choices.language)
+    ))?;
+    out.print(&format!(
+        "  Type:         {}{}",
+        target.kind(),
+        inferred(choices.kind)
+    ))?;
+
+    match target.framework() {
+        Some(fw) => out.print(&format!(
+            "  Framework:    {}{}",
+            fw,
+            inferred(choices.framework)
+        ))?,
+        None => out.print("  Framework:    (none)")?,
     }
-    out.print(&format!("  Location:     {}", output_dir.display()))?;
+
+    out.print(&format!(
+        "  Architecture: {}{}",
+        target.architecture(),
+        inferred(choices.architecture)
+    ))?;
+    out.print(&format!("  Location:     {}", project_path.display()))?;
+    out.print("")?;
+
+    Ok(())
+}
+
+/// Print language- and framework-specific next steps.
+///
+/// RFC-0001 §8 requires next steps in the success output. Generic steps
+/// ("# Start coding!") don't satisfy this — a Rust user needs `cargo run`,
+/// a Python FastAPI user needs `uvicorn`, a TypeScript user needs `npm`.
+fn show_next_steps(target: &Target, name: &str, out: &OutputManager) -> CliResult<()> {
+    use scarff_core::domain::{Language as L, PythonFramework, TypeScriptFramework};
+
+    out.print("Next steps:")?;
+    out.print(&format!("  cd {name}"))?;
+
+    match target.language() {
+        L::Rust => {
+            out.print("  cargo build")?;
+            out.print("  cargo run")?;
+        }
+
+        L::Python => match target.framework() {
+            Some(CoreFramework::Python(PythonFramework::Django)) => {
+                out.print("  python -m venv .venv && source .venv/bin/activate")?;
+                out.print("  pip install -r requirements.txt")?;
+                out.print("  python manage.py runserver")?;
+            }
+            Some(CoreFramework::Python(PythonFramework::FastApi)) => {
+                out.print("  python -m venv .venv && source .venv/bin/activate")?;
+                out.print("  pip install -r requirements.txt")?;
+                out.print("  uvicorn main:app --reload")?;
+            }
+            Some(CoreFramework::Python(PythonFramework::Flask)) => {
+                out.print("  python -m venv .venv && source .venv/bin/activate")?;
+                out.print("  pip install -r requirements.txt")?;
+                out.print("  flask run")?;
+            }
+            _ => {
+                out.print("  python -m venv .venv && source .venv/bin/activate")?;
+                out.print("  python main.py")?;
+            }
+        },
+
+        L::TypeScript => match target.framework() {
+            Some(CoreFramework::TypeScript(
+                TypeScriptFramework::React | TypeScriptFramework::Vue | TypeScriptFramework::Svelte,
+            )) => {
+                out.print("  npm install")?;
+                out.print("  npm run dev")?;
+            }
+            Some(CoreFramework::TypeScript(TypeScriptFramework::NextJs)) => {
+                out.print("  npm install")?;
+                out.print("  npm run dev")?;
+                out.print("  # → http://localhost:3000")?;
+            }
+            Some(CoreFramework::TypeScript(TypeScriptFramework::NestJs)) => {
+                out.print("  npm install")?;
+                out.print("  npm run start:dev")?;
+            }
+            _ => {
+                out.print("  npm install")?;
+                out.print("  npm run build && npm start")?;
+            }
+        },
+
+        L::Go => {
+            out.print("  go mod tidy")?;
+            out.print("  go run .")?;
+        }
+    }
+
     out.print("")?;
     Ok(())
 }
@@ -271,6 +427,9 @@ fn confirm() -> CliResult<bool> {
     use std::io::{self, Write};
 
     print!("Continue? [Y/n] ");
+
+    // Map the flush error — panicking here (via unwrap) is wrong when stdout
+    // may be closed because the caller piped our output to a closed reader.
     io::stdout().flush().map_err(|e| CliError::IoError {
         message: "failed to flush stdout".into(),
         source: e,
@@ -284,8 +443,8 @@ fn confirm() -> CliResult<bool> {
             source: e,
         })?;
 
-    let input = input.trim().to_ascii_lowercase();
-    Ok(input.is_empty() || input == "y" || input == "yes")
+    let trimmed = input.trim().to_lowercase();
+    Ok(trimmed.is_empty() || trimmed == "y" || trimmed == "yes")
 }
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
