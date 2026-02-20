@@ -107,6 +107,7 @@ pub struct NewArgs {
     #[arg(value_name = "NAME", help = "Project name or path")]
     pub name: String,
 
+    // for MVP we make it compulsory
     /// Programming language.
     #[arg(
         short = 'l',
