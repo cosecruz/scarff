@@ -32,8 +32,11 @@ pub fn init_logging(args: &GlobalArgs) -> anyhow::Result<()> {
 
     // RUST_LOG wins; otherwise build our own filter string so each crate gets
     // the same level as the top-level filter.
-    let filter = EnvFilter::try_from_default_env()
-        .unwrap_or_else(|_| EnvFilter::new(format!("scarff={level},scarff_core={level}",)));
+    let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| {
+        EnvFilter::new(format!(
+            "scarff={level},scarff_core={level},scarff_adapters={level}",
+        ))
+    });
 
     // Detect colour support via the stdlib (stable since 1.70).
     // `std::io::IsTerminal` supersedes the deprecated `atty` crate.
@@ -45,6 +48,7 @@ pub fn init_logging(args: &GlobalArgs) -> anyhow::Result<()> {
         .with_file(false)
         .with_line_number(false)
         .with_ansi(use_ansi)
+        .with_span_events(tracing_subscriber::fmt::format::FmtSpan::CLOSE)
         .with_writer(std::io::stderr);
 
     // `try_init` returns an error instead of panicking if a subscriber is
